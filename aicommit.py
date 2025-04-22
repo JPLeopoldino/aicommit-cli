@@ -126,7 +126,7 @@ def git_add_and_commit(message):
         sys.exit(1)
 
 # --- Execução Principal ---
-if __name__ == "__main__":
+def main():
     # 1. Pega o diff das mudanças não adicionadas
     diff_output = get_git_diff()
 
@@ -135,3 +135,6 @@ if __name__ == "__main__":
 
     # 3. Adiciona os arquivos e faz o commit
     git_add_and_commit(commit_message)
+
+if __name__ == "__main__":
+    main()

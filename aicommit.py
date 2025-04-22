@@ -57,7 +57,6 @@ def get_git_diff():
     print("🔍 Verificando mudanças nos arquivos...")
     # Usa 'git diff' para pegar mudanças que ainda não foram para o stage
     diff = run_git_command(['git', 'diff'])
-    print(diff)
     if not diff:
         print("✅ Nenhuma mudança detectada para commitar.")
         sys.exit(0)

@@ -4,6 +4,7 @@
 import os
 import sys
 import subprocess
+import argparse
 import google.generativeai as genai
 from dotenv import load_dotenv
 
@@ -18,7 +19,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 MODEL_NAME = "gemini-1.5-flash"
 # Instrução para a IA gerar a mensagem de commit
 COMMIT_MESSAGE_PROMPT_TEMPLATE = """
-Gere uma mensagem de commit concisa e significativa em português, seguindo o padrão Conventional Commits (ex: 'feat: adiciona nova funcionalidade X', 'fix: corrige bug Y', 'docs: atualiza documentação Z', 'style: formata código', 'refactor: refatora componente A', 'test: adiciona testes para B', 'chore: atualiza dependências').
+Gere uma mensagem de commit concisa e significativa em {language}, seguindo o padrão Conventional Commits (ex: 'feat: adiciona nova funcionalidade X', 'fix: corrige bug Y', 'docs: atualiza documentação Z', 'style: formata código', 'refactor: refatora componente A', 'test: adiciona testes para B', 'chore: atualiza dependências').
 
 A mensagem deve ter no máximo 72 caracteres na primeira linha (título) e descrever claramente as mudanças presentes no seguinte 'git diff':
 
@@ -28,23 +29,21 @@ Mensagem de commit gerada:
 """
 # --- Funções Auxiliares ---
 
-def run_git_command(command):
+def run_git_command(command, verbose=False):
     """Executa um comando Git e retorna a saída ou lança exceção em caso de erro."""
     try:
-        # Executa o comando. text=True decodifica stdout/stderr como texto.
-        # capture_output=True captura stdout/stderr.
-        # check=True lança CalledProcessError se o comando retornar um código diferente de zero.
-        # stderr=subprocess.PIPE captura erros separadamente
         result = subprocess.run(command, text=True, capture_output=True, check=True, encoding='utf-8')
         return result.stdout.strip()
     except FileNotFoundError:
         print(f"Erro: O comando '{command[0]}' não foi encontrado. O Git está instalado e no PATH?")
         sys.exit(1)
     except subprocess.CalledProcessError as e:
-        print(f"Erro ao executar o comando Git: {' '.join(command)}")
-        print(f"Código de saída: {e.returncode}")
-        print(f"Erro: {e.stderr.strip()}")
-        # Verifica se é um repositório git válido
+        if verbose:
+            print(f"Erro ao executar o comando Git: {' '.join(command)}")
+            print(f"Código de saída: {e.returncode}")
+            print(f"Erro: {e.stderr.strip()}")
+        else:
+            print(f"Erro ao executar o comando Git: {e.stderr.strip()}")
         if "not a git repository" in e.stderr:
             print("Certifique-se de estar dentro de um repositório Git.")
         sys.exit(1)
@@ -52,37 +51,37 @@ def run_git_command(command):
         print(f"Um erro inesperado ocorreu ao executar o Git: {e}")
         sys.exit(1)
 
-def get_git_diff():
+def get_git_diff(verbose=False):
     """Obtém as mudanças 'unstaged' (não adicionadas ao stage) no repositório."""
-    print("🔍 Verificando mudanças nos arquivos...")
-    # Usa 'git diff' para pegar mudanças que ainda não foram para o stage
-    diff = run_git_command(['git', 'diff'])
+    if verbose:
+        print("🔍 Verificando mudanças nos arquivos...")
+    diff = run_git_command(['git', 'diff'], verbose=verbose)
     if not diff:
         print("✅ Nenhuma mudança detectada para commitar.")
         sys.exit(0)
-    print(" mudanças detectadas.")
+    if verbose:
+        print(" mudanças detectadas.")
     return diff
 
-def generate_commit_message(diff):
+def generate_commit_message(diff, lang='en', verbose=False):
     """Gera a mensagem de commit usando a API Gemini."""
     if not GEMINI_API_KEY:
         print("Erro: A chave da API Gemini (GEMINI_API_KEY) não foi encontrada.")
         print("Verifique seu arquivo .env ou as variáveis de ambiente do sistema.")
         sys.exit(1)
 
-    print(f"🤖 Gerando mensagem de commit com o modelo {MODEL_NAME}...")
+    if verbose:
+        print(f"🤖 Gerando mensagem de commit com o modelo {MODEL_NAME}...")
     try:
-        # Configura a API Gemini
         genai.configure(api_key=GEMINI_API_KEY)
 
-        # Cria o modelo generativo
         model = genai.GenerativeModel(MODEL_NAME)
 
-        # Prepara o prompt final
-        prompt = COMMIT_MESSAGE_PROMPT_TEMPLATE.format(diff=diff)
+        language_map = {'pt': 'português', 'en': 'english'}
+        language_name = language_map.get(lang, 'english')
 
-        # Gera o conteúdo (mensagem de commit)
-        # Adicionando configuração de segurança para evitar bloqueios comuns
+        prompt = COMMIT_MESSAGE_PROMPT_TEMPLATE.format(diff=diff, language=language_name)
+
         safety_settings = [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
             {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -91,50 +90,51 @@ def generate_commit_message(diff):
         ]
         response = model.generate_content(prompt, safety_settings=safety_settings)
 
-        # Extrai e limpa a mensagem gerada
         commit_message = response.text.strip()
-        # Remove possíveis cercas de código (```) ou aspas que a IA possa adicionar
         commit_message = commit_message.replace('```', '').replace('`', '').replace('"', '').replace("'", "")
-        # Garante que a mensagem não esteja vazia
         if not commit_message:
              raise ValueError("A API retornou uma mensagem vazia.")
 
-        print("✨ Mensagem de commit gerada:")
-        print(f"   '{commit_message}'")
+        if verbose:
+            print("✨ Mensagem de commit gerada:")
+            print(f"   '{commit_message}'")
         return commit_message
 
     except Exception as e:
         print(f"Erro ao gerar mensagem de commit com a API Gemini: {e}")
-        # Imprime a resposta completa em caso de erro para depuração, se disponível
         if 'response' in locals() and hasattr(response, 'prompt_feedback'):
             print(f"Feedback do prompt: {response.prompt_feedback}")
         sys.exit(1)
 
-def git_add_and_commit(message):
+def git_add_and_commit(message, verbose=False):
     """Adiciona todas as mudanças ao stage e faz o commit."""
     try:
-        print("➕ Adicionando arquivos ao stage (git add .)...")
-        run_git_command(['git', 'add', '.'])
+        if verbose:
+            print("➕ Adicionando arquivos ao stage (git add .)...")
+        run_git_command(['git', 'add', '.'], verbose=verbose)
 
-        print(f"🚀 Realizando commit com a mensagem: '{message}'...")
-        run_git_command(['git', 'commit', '-m', message])
+        if verbose:
+            print(f"🚀 Realizando commit com a mensagem: '{message}'...")
+        run_git_command(['git', 'commit', '-m', message], verbose=verbose)
 
-        print("🎉 Commit realizado com sucesso!")
+        if verbose:
+            print("🎉 Commit realizado com sucesso!")
     except Exception as e:
-        # A função run_git_command já imprime erros detalhados
         print(f"Falha ao adicionar ou commitar as mudanças.")
         sys.exit(1)
 
 # --- Execução Principal ---
 def main():
-    # 1. Pega o diff das mudanças não adicionadas
-    diff_output = get_git_diff()
+    parser = argparse.ArgumentParser(description='Gera mensagens de commit usando IA.')
+    parser.add_argument('-v', '--verbose', action='store_true', help='Exibe mensagens detalhadas durante a execução.')
+    parser.add_argument('-l', '--lang', choices=['pt', 'en'], default='en', help='Idioma da mensagem de commit (pt ou en). Padrão: en.')
+    args = parser.parse_args()
 
-    # 2. Gera a mensagem de commit usando a IA
-    commit_message = generate_commit_message(diff_output)
+    diff_output = get_git_diff(verbose=args.verbose)
 
-    # 3. Adiciona os arquivos e faz o commit
-    git_add_and_commit(commit_message)
+    commit_message = generate_commit_message(diff_output, lang=args.lang, verbose=args.verbose)
+
+    git_add_and_commit(commit_message, verbose=args.verbose)
 
 if __name__ == "__main__":
     main()

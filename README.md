@@ -49,10 +49,26 @@ Navigate to your Git repository directory in the terminal and simply run:
 aicommit
 ```
 
+**Options:**
+
+*   `-v` or `--verbose`: Show detailed messages during execution (e.g., diff checking, API call, staging, committing).
+*   `-l <lang>` or `--lang <lang>`: Specify the language for the generated commit message. Supported languages: `en` (English, default), `pt` (Portuguese).
+
+**Examples:**
+
+*   Generate a commit message in English (default):
+    ```bash
+    aicommit
+    ```
+*   Generate a commit message in Portuguese and show verbose output:
+    ```bash
+    aicommit -l pt -v
+    ```
+
 The tool will:
 1. Check for unstaged changes (`git diff`).
-2. Send the diff to the Gemini API to generate a commit message.
-3. Display the generated message.
+2. Send the diff to the Gemini API to generate a commit message in the specified language.
+3. Display the generated message (and other steps if `--verbose` is used).
 4. Stage all changes (`git add .`).
 5. Commit the changes with the generated message (`git commit -m "message"`).
 

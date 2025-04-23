@@ -100,87 +100,139 @@ def sanitize_branch_name(name):
         return f"ai-generated-branch-{os.urandom(4).hex()}" # Fallback name
     return name.lower()
 
-def generate_branch_name(diff, model_name=DEFAULT_MODEL_NAME, verbose=False):
-    """Generates a branch name using the Gemini API."""
+def generate_branch_name(diff, model_name=DEFAULT_MODEL_NAME, verbose=False, interactive=False):
+    """Generates a branch name using the Gemini API, with optional interactive confirmation."""
     if not GEMINI_API_KEY:
         print("Error: Gemini API key (GEMINI_API_KEY) not found.")
         print("Check your .env file or system environment variables.")
         sys.exit(1)
 
-    if verbose:
-        print(f"🤖 Generating branch name with model {model_name}...")
-    try:
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel(model_name)
-        prompt = BRANCH_NAME_PROMPT_TEMPLATE.format(diff=diff)
-
-        safety_settings = [
-            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-        ]
-        response = model.generate_content(prompt, safety_settings=safety_settings)
-
-        branch_name = response.text.strip()
-        sanitized_name = sanitize_branch_name(branch_name)
-
-        if not sanitized_name:
-             raise ValueError("The API returned an empty or invalid branch name.")
-
+    while True: # Loop for regeneration
         if verbose:
-            print(f"✨ Branch name generated (sanitized): '{sanitized_name}' (Original: '{branch_name}')")
-        return sanitized_name
+            print(f"🤖 Generating branch name with model {model_name}...")
+        try:
+            genai.configure(api_key=GEMINI_API_KEY)
+            model = genai.GenerativeModel(model_name)
+            prompt = BRANCH_NAME_PROMPT_TEMPLATE.format(diff=diff)
 
-    except Exception as e:
-        print(f"Error generating branch name with Gemini API: {e}")
-        if 'response' in locals() and hasattr(response, 'prompt_feedback'):
-            print(f"Prompt feedback: {response.prompt_feedback}")
-        # Don't exit here, maybe fallback or let the user know? For now, exit.
-        sys.exit(1)
+            safety_settings = [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+            ]
+            response = model.generate_content(prompt, safety_settings=safety_settings)
 
-def generate_commit_message(diff, model_name=DEFAULT_MODEL_NAME, lang='en', verbose=False):
-    """Generates the commit message using the Gemini API."""
+            branch_name = response.text.strip()
+            sanitized_name = sanitize_branch_name(branch_name)
+
+            if not sanitized_name:
+                 raise ValueError("The API returned an empty or invalid branch name.")
+
+            if verbose:
+                print(f"✨ Branch name generated (sanitized): '{sanitized_name}' (Original: '{branch_name}')")
+
+            if not interactive:
+                return sanitized_name # Return directly if not interactive
+
+            # --- Interactive Confirmation ---
+            print(f"\nSuggested branch name: \033[1m{sanitized_name}\033[0m") # Bold text
+            while True:
+                choice = input("Accept this branch name? (y/n/r=regenerate): ").lower().strip()
+                if choice == 'y':
+                    return sanitized_name
+                elif choice == 'n':
+                    print("Aborted by user.")
+                    sys.exit(0)
+                elif choice == 'r':
+                    if verbose:
+                        print("🔄 Regenerating branch name...")
+                    break # Break inner loop to regenerate
+                else:
+                    print("Invalid choice. Please enter 'y', 'n', or 'r'.")
+            # If 'r' was chosen, the outer loop continues
+
+        except Exception as e:
+            print(f"Error generating branch name with Gemini API: {e}")
+            if 'response' in locals() and hasattr(response, 'prompt_feedback'):
+                print(f"Prompt feedback: {response.prompt_feedback}")
+            # Ask if user wants to retry in interactive mode
+            if interactive:
+                retry_choice = input("Failed to generate. Retry? (y/n): ").lower().strip()
+                if retry_choice != 'y':
+                    print("Aborted.")
+                    sys.exit(1)
+                # Continue outer loop to retry
+            else:
+                sys.exit(1) # Exit if not interactive
+
+def generate_commit_message(diff, model_name=DEFAULT_MODEL_NAME, lang='en', verbose=False, interactive=False):
+    """Generates the commit message using the Gemini API, with optional interactive confirmation."""
     if not GEMINI_API_KEY:
         print("Error: Gemini API key (GEMINI_API_KEY) not found.")
         print("Check your .env file or system environment variables.")
         sys.exit(1)
 
-    if verbose:
-        print(f"🤖 Generating commit message with model {model_name}...")
-    try:
-        genai.configure(api_key=GEMINI_API_KEY)
-
-        model = genai.GenerativeModel(model_name)
-
-        language_map = {'pt': 'Portuguese', 'en': 'English'} # Capitalized language names
-        language_name = language_map.get(lang, 'English') # Default to English
-
-        prompt = COMMIT_MESSAGE_PROMPT_TEMPLATE.format(diff=diff, language=language_name)
-
-        safety_settings = [
-            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-        ]
-        response = model.generate_content(prompt, safety_settings=safety_settings)
-
-        commit_message = response.text.strip()
-        commit_message = commit_message.replace('```', '').replace('`', '').replace('"', '').replace("'", "")
-        if not commit_message:
-             raise ValueError("The API returned an empty message.")
-
+    while True: # Loop for regeneration
         if verbose:
-            print("✨ Commit message generated:")
-            print(f"   '{commit_message}'")
-        return commit_message
+            print(f"🤖 Generating commit message with model {model_name}...")
+        try:
+            genai.configure(api_key=GEMINI_API_KEY)
+            model = genai.GenerativeModel(model_name)
+            language_map = {'pt': 'Portuguese', 'en': 'English'}
+            language_name = language_map.get(lang, 'English')
+            prompt = COMMIT_MESSAGE_PROMPT_TEMPLATE.format(diff=diff, language=language_name)
 
-    except Exception as e:
-        print(f"Error generating commit message with Gemini API: {e}")
-        if 'response' in locals() and hasattr(response, 'prompt_feedback'):
-            print(f"Prompt feedback: {response.prompt_feedback}")
-        sys.exit(1)
+            safety_settings = [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+            ]
+            response = model.generate_content(prompt, safety_settings=safety_settings)
+
+            commit_message = response.text.strip()
+            commit_message = commit_message.replace('```', '').replace('`', '').replace('"', '').replace("'", "")
+            if not commit_message:
+                 raise ValueError("The API returned an empty message.")
+
+            if verbose:
+                print("✨ Commit message generated:")
+                print(f"   '{commit_message}'")
+
+            if not interactive:
+                return commit_message # Return directly if not interactive
+
+            # --- Interactive Confirmation ---
+            print(f"\nSuggested commit message:\n---\n\033[1m{commit_message}\033[0m\n---") # Bold text
+            while True:
+                choice = input("Accept this commit message? (y/n/r=regenerate): ").lower().strip()
+                if choice == 'y':
+                    return commit_message
+                elif choice == 'n':
+                    print("Aborted by user.")
+                    sys.exit(0)
+                elif choice == 'r':
+                    if verbose:
+                        print("🔄 Regenerating commit message...")
+                    break # Break inner loop to regenerate
+                else:
+                    print("Invalid choice. Please enter 'y', 'n', or 'r'.")
+            # If 'r' was chosen, the outer loop continues
+
+        except Exception as e:
+            print(f"Error generating commit message with Gemini API: {e}")
+            if 'response' in locals() and hasattr(response, 'prompt_feedback'):
+                print(f"Prompt feedback: {response.prompt_feedback}")
+            # Ask if user wants to retry in interactive mode
+            if interactive:
+                retry_choice = input("Failed to generate. Retry? (y/n): ").lower().strip()
+                if retry_choice != 'y':
+                    print("Aborted.")
+                    sys.exit(1)
+                # Continue outer loop to retry
+            else:
+                sys.exit(1) # Exit if not interactive
 
 def git_commit(message, verbose=False):
     """Commits with the provided message."""
@@ -208,24 +260,23 @@ def git_create_and_checkout_branch(branch_name, verbose=False):
     """Creates and checks out a new Git branch."""
     try:
         if verbose:
-            print(f"🌿 Creating and checking out new branch...")
+            print(f"🌿 Creating and checking out new branch '{branch_name}'...") # Added branch name for clarity
         run_git_command(['git', 'checkout', '-b', branch_name], verbose=verbose)
         if verbose:
             print(f"✅ Switched to new branch '{branch_name}'.")
     except subprocess.CalledProcessError as e:
-        # Handle specific error if branch already exists?
         if "already exists" in e.stderr:
-             print(f"⚠️ Branch '{branch_name}' already exists. Attempting to checkout...")
+             if verbose:
+                 print(f"⚠️ Branch '{branch_name}' already exists. Attempting to checkout...")
              try:
                  run_git_command(['git', 'checkout', branch_name], verbose=verbose)
-                 print(f"✅ Switched to existing branch '{branch_name}'.")
+                 if verbose:
+                     print(f"✅ Switched to existing branch '{branch_name}'.")
              except Exception as checkout_e:
-                 print(f"❌ Failed to checkout existing branch '{branch_name}': {checkout_e}")
+                 print(f"❌ Failed to checkout existing branch '{branch_name}'.")
                  sys.exit(1)
-
         else:
             print(f"❌ Failed to create or checkout branch '{branch_name}'.")
-            # run_git_command already prints details if verbose
             sys.exit(1)
     except Exception as e:
         print(f"❌ An unexpected error occurred during branch creation/checkout: {e}")
@@ -233,21 +284,27 @@ def git_create_and_checkout_branch(branch_name, verbose=False):
 
 # --- Main Execution ---
 def main():
-    parser = argparse.ArgumentParser(description='Generate commit messages and optionally branch names using AI.') # Updated description
+    parser = argparse.ArgumentParser(description='Generate commit messages and optionally branch names using AI.')
     parser.add_argument('-v', '--verbose', action='store_true', help='Show detailed messages during execution.')
     parser.add_argument('-l', '--lang', choices=['pt', 'en'], default='en', help='Commit message language (pt or en). Default: en.')
     parser.add_argument(
         '-m', 
         '--model', 
         default=DEFAULT_MODEL_NAME, 
-        choices=ALLOWED_MODELS, # Add choices constraint
+        choices=ALLOWED_MODELS, 
         help=f'Gemini model to use. Default: {DEFAULT_MODEL_NAME}'
     )
-    parser.add_argument( # Add new branch flag
+    parser.add_argument(
         '-b',
         '--new-branch',
         action='store_true',
         help='Generate a branch name using AI, create and checkout the new branch before committing.'
+    )
+    parser.add_argument(
+        '-i',
+        '--interactive',
+        action='store_true',
+        help='Prompt for confirmation before using the generated branch name or commit message.'
     )
     args = parser.parse_args()
 
@@ -273,13 +330,13 @@ def main():
 
     # --- Branch Creation (if requested) ---
     if args.new_branch:
-        branch_name = generate_branch_name(diff_to_process, model_name=args.model, verbose=args.verbose)
+        branch_name = generate_branch_name(diff_to_process, model_name=args.model, verbose=args.verbose, interactive=args.interactive)
         git_create_and_checkout_branch(branch_name, verbose=args.verbose)
 
     # --- Commit Message Generation ---
     if args.verbose:
         print("📝 Generating commit message...")
-    commit_message = generate_commit_message(diff_to_process, model_name=args.model, lang=args.lang, verbose=args.verbose)
+    commit_message = generate_commit_message(diff_to_process, model_name=args.model, lang=args.lang, verbose=args.verbose, interactive=args.interactive)
 
     # --- Staging and Committing ---
     if not is_staged_diff:

@@ -54,6 +54,8 @@ aicommit
 *   `-v` or `--verbose`: Show detailed messages during execution (e.g., diff checking, API call, staging, committing).
 *   `-l <lang>` or `--lang <lang>`: Specify the language for the generated commit message. Supported languages: `en` (English, default), `pt` (Portuguese).
 *   `-m <model_name>` or `--model <model_name>`: Specify the Gemini model to use. Defaults to `gemini-1.5-flash`. Check Google AI documentation for available models.
+*   `-b` or `--new-branch`: Generate a branch name using AI, create and checkout the new branch before committing.
+*   `-i` or `--interactive`: Prompt for confirmation before using the generated branch name or commit message. Allows regenerating if the suggestion is not suitable.
 
 **Examples:**
 

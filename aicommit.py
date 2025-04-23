@@ -8,84 +8,84 @@ import argparse
 import google.generativeai as genai
 from dotenv import load_dotenv
 
-# Carrega variáveis de ambiente do arquivo .env
+# Load environment variables from .env file
 load_dotenv()
 
-# --- Configuração ---
-# Tenta obter a chave da API Gemini do ambiente
+# --- Configuration ---
+# Try to get Gemini API key from environment
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-# Modelo Gemini a ser usado (verificar disponibilidade no nível gratuito)
-# 'gemini-1.5-flash' é geralmente uma boa opção com nível gratuito.
+# Gemini model to use (check free tier availability)
+# 'gemini-1.5-flash' is generally a good option with free tier.
 MODEL_NAME = "gemini-1.5-flash"
-# Instrução para a IA gerar a mensagem de commit
+# Instruction for the AI to generate the commit message
 COMMIT_MESSAGE_PROMPT_TEMPLATE = """
-Gere uma mensagem de commit concisa e significativa em {language}, seguindo o padrão Conventional Commits (ex: 'feat: adiciona nova funcionalidade X', 'fix: corrige bug Y', 'docs: atualiza documentação Z', 'style: formata código', 'refactor: refatora componente A', 'test: adiciona testes para B', 'chore: atualiza dependências').
+Generate a concise and meaningful commit message in {language}, following the Conventional Commits standard (e.g., 'feat: add new feature X', 'fix: correct bug Y', 'docs: update documentation Z', 'style: format code', 'refactor: refactor component A', 'test: add tests for B', 'chore: update dependencies').
 
-A mensagem deve ter no máximo 72 caracteres na primeira linha (título) e descrever claramente as mudanças presentes no seguinte 'git diff':
+The message must have a maximum of 72 characters in the first line (title) and clearly describe the changes present in the following 'git diff':
 
 {diff}
 
-Mensagem de commit gerada:
+Generated commit message:
 """
-# --- Funções Auxiliares ---
+# --- Helper Functions ---
 #
 
 def run_git_command(command, verbose=False):
-    """Executa um comando Git e retorna a saída ou lança exceção em caso de erro."""
+    """Executes a Git command and returns the output or raises an exception on error."""
     try:
         result = subprocess.run(command, text=True, capture_output=True, check=True, encoding='utf-8')
         return result.stdout.strip()
     except FileNotFoundError:
-        print(f"Erro: O comando '{command[0]}' não foi encontrado. O Git está instalado e no PATH?")
+        print(f"Error: Command '{command[0]}' not found. Is Git installed and in PATH?")
         sys.exit(1)
     except subprocess.CalledProcessError as e:
         if verbose:
-            print(f"Erro ao executar o comando Git: {' '.join(command)}")
-            print(f"Código de saída: {e.returncode}")
-            print(f"Erro: {e.stderr.strip()}")
+            print(f"Error executing Git command: {' '.join(command)}")
+            print(f"Exit code: {e.returncode}")
+            print(f"Error: {e.stderr.strip()}")
         else:
-            print(f"Erro ao executar o comando Git: {e.stderr.strip()}")
+            print(f"Error executing Git command: {e.stderr.strip()}")
         if "not a git repository" in e.stderr:
-            print("Certifique-se de estar dentro de um repositório Git.")
+            print("Make sure you are inside a Git repository.")
         sys.exit(1)
     except Exception as e:
-        print(f"Um erro inesperado ocorreu ao executar o Git: {e}")
+        print(f"An unexpected error occurred while running Git: {e}")
         sys.exit(1)
 
 def get_staged_diff(verbose=False):
-    """Obtém as mudanças 'staged' (adicionadas ao stage) no repositório."""
+    """Gets the 'staged' changes (added to the stage) in the repository."""
     if verbose:
-        print("🔍 Verificando mudanças staged (git diff --staged)...")
+        print("🔍 Checking staged changes (git diff --staged)...")
     diff = run_git_command(['git', 'diff', '--staged'], verbose=verbose)
     if diff and verbose:
-        print(" staged mudanças detectadas.")
+        print(" Staged changes detected.")
     return diff
 
 def get_unstaged_diff(verbose=False):
-    """Obtém as mudanças 'unstaged' (não adicionadas ao stage) no repositório."""
+    """Gets the 'unstaged' changes (not added to the stage) in the repository."""
     if verbose:
-        print("🔍 Verificando mudanças unstaged (git diff)...")
+        print("🔍 Checking unstaged changes (git diff)...")
     diff = run_git_command(['git', 'diff'], verbose=verbose)
     if diff and verbose:
-        print(" unstaged mudanças detectadas.")
+        print(" Unstaged changes detected.")
     return diff
 
 def generate_commit_message(diff, lang='en', verbose=False):
-    """Gera a mensagem de commit usando a API Gemini."""
+    """Generates the commit message using the Gemini API."""
     if not GEMINI_API_KEY:
-        print("Erro: A chave da API Gemini (GEMINI_API_KEY) não foi encontrada.")
-        print("Verifique seu arquivo .env ou as variáveis de ambiente do sistema.")
+        print("Error: Gemini API key (GEMINI_API_KEY) not found.")
+        print("Check your .env file or system environment variables.")
         sys.exit(1)
 
     if verbose:
-        print(f"🤖 Gerando mensagem de commit com o modelo {MODEL_NAME}...")
+        print(f"🤖 Generating commit message with model {MODEL_NAME}...")
     try:
         genai.configure(api_key=GEMINI_API_KEY)
 
         model = genai.GenerativeModel(MODEL_NAME)
 
-        language_map = {'pt': 'português', 'en': 'english'}
-        language_name = language_map.get(lang, 'english')
+        language_map = {'pt': 'Portuguese', 'en': 'English'} # Capitalized language names
+        language_name = language_map.get(lang, 'English') # Default to English
 
         prompt = COMMIT_MESSAGE_PROMPT_TEMPLATE.format(diff=diff, language=language_name)
 
@@ -100,73 +100,73 @@ def generate_commit_message(diff, lang='en', verbose=False):
         commit_message = response.text.strip()
         commit_message = commit_message.replace('```', '').replace('`', '').replace('"', '').replace("'", "")
         if not commit_message:
-             raise ValueError("A API retornou uma mensagem vazia.")
+             raise ValueError("The API returned an empty message.")
 
         if verbose:
-            print("✨ Mensagem de commit gerada:")
+            print("✨ Commit message generated:")
             print(f"   '{commit_message}'")
         return commit_message
 
     except Exception as e:
-        print(f"Erro ao gerar mensagem de commit com a API Gemini: {e}")
+        print(f"Error generating commit message with Gemini API: {e}")
         if 'response' in locals() and hasattr(response, 'prompt_feedback'):
-            print(f"Feedback do prompt: {response.prompt_feedback}")
+            print(f"Prompt feedback: {response.prompt_feedback}")
         sys.exit(1)
 
 def git_commit(message, verbose=False):
-    """Faz o commit com a mensagem fornecida."""
+    """Commits with the provided message."""
     try:
         if verbose:
-            print(f"🚀 Realizando commit com a mensagem: '{message}'...")
+            print(f"🚀 Committing with message: '{message}'...")
         run_git_command(['git', 'commit', '-m', message], verbose=verbose)
         if verbose:
-            print("🎉 Commit realizado com sucesso!")
+            print("🎉 Commit successful!")
     except Exception as e:
-        print(f"Falha ao commitar as mudanças.")
+        print(f"Failed to commit changes.")
         sys.exit(1)
 
 def git_add_and_commit(message, verbose=False):
-    """Adiciona todas as mudanças unstaged ao stage e faz o commit."""
+    """Adds all unstaged changes to the stage and commits."""
     try:
         if verbose:
-            print("➕ Adicionando arquivos unstaged ao stage (git add .)...")
+            print("➕ Adding unstaged files to stage (git add .)...")
         run_git_command(['git', 'add', '.'], verbose=verbose)
 
-        # Chama a função de commit separada
+        # Call the separate commit function
         git_commit(message, verbose=verbose)
 
     except Exception as e:
-        # A mensagem de erro de git_commit será impressa por ela mesma
-        # Podemos adicionar uma mensagem mais genérica aqui se necessário
-        # print(f"Falha ao adicionar ou commitar as mudanças unstaged.")
+        # Error message from git_commit will be printed by it
+        # We can add a more generic message here if needed
+        # print(f"Failed to add or commit unstaged changes.")
         sys.exit(1)
 
-# --- Execução Principal ---
+# --- Main Execution ---
 def main():
-    parser = argparse.ArgumentParser(description='Gera mensagens de commit usando IA.')
-    parser.add_argument('-v', '--verbose', action='store_true', help='Exibe mensagens detalhadas durante a execução.')
-    parser.add_argument('-l', '--lang', choices=['pt', 'en'], default='en', help='Idioma da mensagem de commit (pt ou en). Padrão: en.')
+    parser = argparse.ArgumentParser(description='Generate commit messages using AI.')
+    parser.add_argument('-v', '--verbose', action='store_true', help='Show detailed messages during execution.')
+    parser.add_argument('-l', '--lang', choices=['pt', 'en'], default='en', help='Commit message language (pt or en). Default: en.')
     args = parser.parse_args()
 
     staged_diff = get_staged_diff(verbose=args.verbose)
 
     if staged_diff:
         if args.verbose:
-            print("📝 Gerando mensagem para mudanças staged...")
+            print("📝 Generating message for staged changes...")
         commit_message = generate_commit_message(staged_diff, lang=args.lang, verbose=args.verbose)
         git_commit(commit_message, verbose=args.verbose)
     else:
         if args.verbose:
-            print("ℹ️ Nenhuma mudança staged encontrada. Verificando mudanças unstaged...")
+            print("ℹ️ No staged changes found. Checking unstaged changes...")
         unstaged_diff = get_unstaged_diff(verbose=args.verbose)
 
         if unstaged_diff:
             if args.verbose:
-                print("📝 Gerando mensagem para mudanças unstaged...")
+                print("📝 Generating message for unstaged changes...")
             commit_message = generate_commit_message(unstaged_diff, lang=args.lang, verbose=args.verbose)
             git_add_and_commit(commit_message, verbose=args.verbose)
         else:
-            print("✅ Nenhuma mudança (staged ou unstaged) detectada para commitar.")
+            print("✅ No changes (staged or unstaged) detected to commit.")
             sys.exit(0)
 
 

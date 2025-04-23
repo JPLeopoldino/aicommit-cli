@@ -53,24 +53,26 @@ aicommit
 
 *   `-v` or `--verbose`: Show detailed messages during execution (e.g., diff checking, API call, staging, committing).
 *   `-l <lang>` or `--lang <lang>`: Specify the language for the generated commit message. Supported languages: `en` (English, default), `pt` (Portuguese).
+*   `-m <model_name>` or `--model <model_name>`: Specify the Gemini model to use. Defaults to `gemini-1.5-flash`. Check Google AI documentation for available models.
 
 **Examples:**
 
-*   Generate a commit message in English (default):
+*   Generate a commit message in English using the default model:
     ```bash
     aicommit
     ```
-*   Generate a commit message in Portuguese and show verbose output:
+*   Generate a commit message in Portuguese, show verbose output, and use a specific model:
     ```bash
-    aicommit -l pt -v
+    aicommit -l pt -v -m gemini-pro
     ```
 
 The tool will:
-1. Check for unstaged changes (`git diff`).
-2. Send the diff to the Gemini API to generate a commit message in the specified language.
-3. Display the generated message (and other steps if `--verbose` is used).
-4. Stage all changes (`git add .`).
-5. Commit the changes with the generated message (`git commit -m "message"`).
+1. Check for staged changes (`git diff --staged`). If found, proceed to step 3 with these changes.
+2. If no staged changes, check for unstaged changes (`git diff`). If found, proceed to step 3 with these changes.
+3. Send the diff to the Gemini API (using the specified model) to generate a commit message in the specified language.
+4. Display the generated message (and other steps if `--verbose` is used).
+5. If unstaged changes were used, stage all changes (`git add .`).
+6. Commit the changes with the generated message (`git commit -m "message"`).
 
 ## Contributing
 

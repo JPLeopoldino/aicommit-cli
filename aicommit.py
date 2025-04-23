@@ -14,9 +14,10 @@ load_dotenv()
 # --- Configuration ---
 # Try to get Gemini API key from environment
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-# Gemini model to use (check free tier availability)
-# 'gemini-1.5-flash' is generally a good option with free tier.
-MODEL_NAME = "gemini-1.5-flash"
+# List of allowed Gemini models
+ALLOWED_MODELS = ["gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+# Default Gemini model to use
+DEFAULT_MODEL_NAME = "gemini-2.0-flash-lite"
 # Instruction for the AI to generate the commit message
 COMMIT_MESSAGE_PROMPT_TEMPLATE = """
 Generate a concise and meaningful commit message in {language}, following the Conventional Commits standard (e.g., 'feat: add new feature X', 'fix: correct bug Y', 'docs: update documentation Z', 'style: format code', 'refactor: refactor component A', 'test: add tests for B', 'chore: update dependencies').
@@ -70,7 +71,7 @@ def get_unstaged_diff(verbose=False):
         print(" Unstaged changes detected.")
     return diff
 
-def generate_commit_message(diff, lang='en', verbose=False):
+def generate_commit_message(diff, model_name=DEFAULT_MODEL_NAME, lang='en', verbose=False):
     """Generates the commit message using the Gemini API."""
     if not GEMINI_API_KEY:
         print("Error: Gemini API key (GEMINI_API_KEY) not found.")
@@ -78,11 +79,11 @@ def generate_commit_message(diff, lang='en', verbose=False):
         sys.exit(1)
 
     if verbose:
-        print(f"🤖 Generating commit message with model {MODEL_NAME}...")
+        print(f"🤖 Generating commit message with model {model_name}...")
     try:
         genai.configure(api_key=GEMINI_API_KEY)
 
-        model = genai.GenerativeModel(MODEL_NAME)
+        model = genai.GenerativeModel(model_name)
 
         language_map = {'pt': 'Portuguese', 'en': 'English'} # Capitalized language names
         language_name = language_map.get(lang, 'English') # Default to English
@@ -146,6 +147,13 @@ def main():
     parser = argparse.ArgumentParser(description='Generate commit messages using AI.')
     parser.add_argument('-v', '--verbose', action='store_true', help='Show detailed messages during execution.')
     parser.add_argument('-l', '--lang', choices=['pt', 'en'], default='en', help='Commit message language (pt or en). Default: en.')
+    parser.add_argument(
+        '-m', 
+        '--model', 
+        default=DEFAULT_MODEL_NAME, 
+        choices=ALLOWED_MODELS, # Add choices constraint
+        help=f'Gemini model to use. Allowed: {", ".join(ALLOWED_MODELS)}. Default: {DEFAULT_MODEL_NAME}'
+    )
     args = parser.parse_args()
 
     staged_diff = get_staged_diff(verbose=args.verbose)
@@ -153,7 +161,7 @@ def main():
     if staged_diff:
         if args.verbose:
             print("📝 Generating message for staged changes...")
-        commit_message = generate_commit_message(staged_diff, lang=args.lang, verbose=args.verbose)
+        commit_message = generate_commit_message(staged_diff, model_name=args.model, lang=args.lang, verbose=args.verbose)
         git_commit(commit_message, verbose=args.verbose)
     else:
         if args.verbose:
@@ -163,7 +171,7 @@ def main():
         if unstaged_diff:
             if args.verbose:
                 print("📝 Generating message for unstaged changes...")
-            commit_message = generate_commit_message(unstaged_diff, lang=args.lang, verbose=args.verbose)
+            commit_message = generate_commit_message(unstaged_diff, model_name=args.model, lang=args.lang, verbose=args.verbose)
             git_add_and_commit(commit_message, verbose=args.verbose)
         else:
             print("✅ No changes (staged or unstaged) detected to commit.")

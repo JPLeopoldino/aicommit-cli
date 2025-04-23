@@ -130,7 +130,10 @@ def generate_branch_name(diff, model_name=DEFAULT_MODEL_NAME, verbose=False, int
                  raise ValueError("The API returned an empty or invalid branch name.")
 
             if verbose:
-                print(f"✨ Branch name generated (sanitized): '{sanitized_name}' (Original: '{branch_name}')")
+                if interactive:
+                    print("✨ Branch name generated.")
+                else:
+                    print(f"✨ Branch name generated (sanitized): '{sanitized_name}' (Original: '{branch_name}')")
 
             if not interactive:
                 return sanitized_name # Return directly if not interactive
@@ -197,8 +200,11 @@ def generate_commit_message(diff, model_name=DEFAULT_MODEL_NAME, lang='en', verb
                  raise ValueError("The API returned an empty message.")
 
             if verbose:
-                print("✨ Commit message generated:")
-                print(f"   '{commit_message}'")
+                if interactive:
+                    print("✨ Commit message generated.")
+                else:
+                    print("✨ Commit message generated:")
+                    print(f"   '{commit_message}'")
 
             if not interactive:
                 return commit_message # Return directly if not interactive

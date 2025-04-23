@@ -186,7 +186,7 @@ def git_commit(message, verbose=False):
     """Commits with the provided message."""
     try:
         if verbose:
-            print(f"🚀 Committing with message: '{message}'...")
+            print(f"🚀 Committing with message...")
         run_git_command(['git', 'commit', '-m', message], verbose=verbose)
         if verbose:
             print("🎉 Commit successful!")
@@ -208,7 +208,7 @@ def git_create_and_checkout_branch(branch_name, verbose=False):
     """Creates and checks out a new Git branch."""
     try:
         if verbose:
-            print(f"🌿 Creating and checking out new branch: '{branch_name}'...")
+            print(f"🌿 Creating and checking out new branch...")
         run_git_command(['git', 'checkout', '-b', branch_name], verbose=verbose)
         if verbose:
             print(f"✅ Switched to new branch '{branch_name}'.")

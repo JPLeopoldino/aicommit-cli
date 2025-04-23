@@ -28,6 +28,7 @@ A mensagem deve ter no máximo 72 caracteres na primeira linha (título) e descr
 Mensagem de commit gerada:
 """
 # --- Funções Auxiliares ---
+#
 
 def run_git_command(command, verbose=False):
     """Executa um comando Git e retorna a saída ou lança exceção em caso de erro."""
@@ -51,16 +52,22 @@ def run_git_command(command, verbose=False):
         print(f"Um erro inesperado ocorreu ao executar o Git: {e}")
         sys.exit(1)
 
-def get_git_diff(verbose=False):
+def get_staged_diff(verbose=False):
+    """Obtém as mudanças 'staged' (adicionadas ao stage) no repositório."""
+    if verbose:
+        print("🔍 Verificando mudanças staged (git diff --staged)...")
+    diff = run_git_command(['git', 'diff', '--staged'], verbose=verbose)
+    if diff and verbose:
+        print(" staged mudanças detectadas.")
+    return diff
+
+def get_unstaged_diff(verbose=False):
     """Obtém as mudanças 'unstaged' (não adicionadas ao stage) no repositório."""
     if verbose:
-        print("🔍 Verificando mudanças nos arquivos...")
+        print("🔍 Verificando mudanças unstaged (git diff)...")
     diff = run_git_command(['git', 'diff'], verbose=verbose)
-    if not diff:
-        print("✅ Nenhuma mudança detectada para commitar.")
-        sys.exit(0)
-    if verbose:
-        print(" mudanças detectadas.")
+    if diff and verbose:
+        print(" unstaged mudanças detectadas.")
     return diff
 
 def generate_commit_message(diff, lang='en', verbose=False):
@@ -106,21 +113,32 @@ def generate_commit_message(diff, lang='en', verbose=False):
             print(f"Feedback do prompt: {response.prompt_feedback}")
         sys.exit(1)
 
-def git_add_and_commit(message, verbose=False):
-    """Adiciona todas as mudanças ao stage e faz o commit."""
+def git_commit(message, verbose=False):
+    """Faz o commit com a mensagem fornecida."""
     try:
-        if verbose:
-            print("➕ Adicionando arquivos ao stage (git add .)...")
-        run_git_command(['git', 'add', '.'], verbose=verbose)
-
         if verbose:
             print(f"🚀 Realizando commit com a mensagem: '{message}'...")
         run_git_command(['git', 'commit', '-m', message], verbose=verbose)
-
         if verbose:
             print("🎉 Commit realizado com sucesso!")
     except Exception as e:
-        print(f"Falha ao adicionar ou commitar as mudanças.")
+        print(f"Falha ao commitar as mudanças.")
+        sys.exit(1)
+
+def git_add_and_commit(message, verbose=False):
+    """Adiciona todas as mudanças unstaged ao stage e faz o commit."""
+    try:
+        if verbose:
+            print("➕ Adicionando arquivos unstaged ao stage (git add .)...")
+        run_git_command(['git', 'add', '.'], verbose=verbose)
+
+        # Chama a função de commit separada
+        git_commit(message, verbose=verbose)
+
+    except Exception as e:
+        # A mensagem de erro de git_commit será impressa por ela mesma
+        # Podemos adicionar uma mensagem mais genérica aqui se necessário
+        # print(f"Falha ao adicionar ou commitar as mudanças unstaged.")
         sys.exit(1)
 
 # --- Execução Principal ---
@@ -130,11 +148,27 @@ def main():
     parser.add_argument('-l', '--lang', choices=['pt', 'en'], default='en', help='Idioma da mensagem de commit (pt ou en). Padrão: en.')
     args = parser.parse_args()
 
-    diff_output = get_git_diff(verbose=args.verbose)
+    staged_diff = get_staged_diff(verbose=args.verbose)
 
-    commit_message = generate_commit_message(diff_output, lang=args.lang, verbose=args.verbose)
+    if staged_diff:
+        if args.verbose:
+            print("📝 Gerando mensagem para mudanças staged...")
+        commit_message = generate_commit_message(staged_diff, lang=args.lang, verbose=args.verbose)
+        git_commit(commit_message, verbose=args.verbose)
+    else:
+        if args.verbose:
+            print("ℹ️ Nenhuma mudança staged encontrada. Verificando mudanças unstaged...")
+        unstaged_diff = get_unstaged_diff(verbose=args.verbose)
 
-    git_add_and_commit(commit_message, verbose=args.verbose)
+        if unstaged_diff:
+            if args.verbose:
+                print("📝 Gerando mensagem para mudanças unstaged...")
+            commit_message = generate_commit_message(unstaged_diff, lang=args.lang, verbose=args.verbose)
+            git_add_and_commit(commit_message, verbose=args.verbose)
+        else:
+            print("✅ Nenhuma mudança (staged ou unstaged) detectada para commitar.")
+            sys.exit(0)
+
 
 if __name__ == "__main__":
     main()
